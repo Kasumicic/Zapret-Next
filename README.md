@@ -1,4 +1,4 @@
-# Zapret-Next
+<h1 align="center">Zapret-Next</h1>
 
 <p align="center">
   <strong>Автономный DPI-bypass модуль для Android</strong><br>
