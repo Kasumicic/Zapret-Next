@@ -1,0 +1,19 @@
+#!/system/bin/sh
+MODDIR=${0%/*}
+. "$MODDIR/lib/zapret.sh"
+
+# Android late_start can run before networking is usable.
+i=0
+while [ "$(getprop sys.boot_completed)" != 1 ] && [ "$i" -lt 120 ]; do
+  sleep 2
+  i=$((i + 1))
+done
+
+if [ "${AUTO_UPDATE:-0}" = 1 ]; then
+  last=$(cat "$MODDIR/data/last_update" 2>/dev/null || echo 0)
+  now=$(date +%s)
+  if [ $((now - last)) -ge $((UPDATE_HOURS * 3600)) ]; then
+    [ "$LOGGING" = 1 ] && zapret_update >>"$LOG_FILE" 2>&1 || zapret_update >/dev/null 2>&1
+  fi
+fi
+[ "$LOGGING" = 1 ] && zapret_start >>"$LOG_FILE" 2>&1 || zapret_start >/dev/null 2>&1

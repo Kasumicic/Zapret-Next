@@ -1,0 +1,12 @@
+#!/sbin/sh
+umask 022
+OUTFD=$2
+ZIPFILE=$3
+
+[ -f /data/adb/magisk/util_functions.sh ] || {
+  echo "! Install this ZIP from Magisk or KernelSU Manager" >&2
+  exit 1
+}
+. /data/adb/magisk/util_functions.sh
+install_module
+

@@ -1,0 +1,32 @@
+#!/system/bin/sh
+MODDIR=${0%/*}
+. "$MODDIR/lib/zapret.sh"
+
+usage() {
+  echo "zapret {start|stop|restart|toggle|status|update|list|strategy NAME|logging on|off|status|menu|parse FILE}"
+}
+
+menu() {
+  while :; do
+    echo
+    echo "Zapret Android: $(zapret_status)"
+    echo "1) Start  2) Stop  3) Restart  4) Strategy"
+    echo "5) Update 6) Status 0) Exit"
+    printf "> "
+    read -r choice
+    case "$choice" in
+      1) zapret_start;; 2) zapret_stop;; 3) zapret_stop; zapret_start;;
+      4) zapret_list; printf "Strategy: "; read -r name; zapret_set_strategy "$name";;
+      5) zapret_update;; 6) zapret_status;; 0) return;; *) echo "Unknown choice";;
+    esac
+  done
+}
+
+case "${1:-menu}" in
+  start) zapret_start;; stop) zapret_stop;; restart) zapret_stop; zapret_start;; toggle) zapret_toggle;;
+  status) zapret_status;; update) zapret_update;; list) zapret_list;;
+  strategy) [ -n "${2:-}" ] || { usage; exit 2; }; zapret_set_strategy "$2";;
+  logging) case "${2:-status}" in on|off) zapret_set_logging "$2";; status) zapret_logging_status;; *) usage; exit 2;; esac;;
+  parse) [ -f "${2:-}" ] || exit 2; parse_strategy "$2";;
+  menu) menu;; -h|--help|help) usage;; *) usage; exit 2;;
+esac

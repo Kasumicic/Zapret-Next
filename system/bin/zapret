@@ -1,0 +1,7 @@
+#!/system/bin/sh
+for d in /data/adb/modules/zapret_android /data/adb/modules_update/zapret_android; do
+  [ -x "$d/zapret" ] && exec "$d/zapret" "$@"
+done
+echo "Zapret Android module not found" >&2
+exit 1
+

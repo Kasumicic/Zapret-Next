@@ -1,0 +1,11 @@
+# Strategy filename from data/strategies.
+STRATEGY='general.bat'
+# any, wlan0, rmnet+ or another iptables interface mask.
+INTERFACE=any
+FIREWALL=auto
+QUEUE_NUM=200
+FW_MARK=0x40000000
+AUTO_UPDATE=0
+UPDATE_HOURS=24
+SOURCE=flowseal
+LOGGING=1
