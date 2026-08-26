@@ -9,7 +9,7 @@ usage() {
 menu() {
   while :; do
     echo
-    echo "Zapret Android: $(zapret_status)"
+    echo "Zapret-Next: $(zapret_status)"
     echo "1) Start  2) Stop  3) Restart  4) Strategy"
     echo "5) Update 6) Status 0) Exit"
     printf "> "

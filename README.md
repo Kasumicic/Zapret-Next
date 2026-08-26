@@ -1,64 +1,178 @@
-# Zapret Android
+# Zapret-Next
 
-Автономный root-модуль KernelSU/Magisk: запускает `nfqws` при загрузке,
-настраивает IPv4/IPv6 NFQUEUE и предоставляет WebUI/CLI.
+<p align="center">
+  <strong>Автономный DPI-bypass модуль для Android</strong><br>
+  KernelSU · Magisk · arm64 · arm · WebUI · CLI
+</p>
 
-## Сборка и установка
+<p align="center">
+  <img alt="Android" src="https://img.shields.io/badge/platform-Android-55d98b">
+  <img alt="Architectures" src="https://img.shields.io/badge/ABI-arm64%20%7C%20arm-6d5dfc">
+  <img alt="Root" src="https://img.shields.io/badge/root-KernelSU%20%7C%20Magisk-ff6577">
+</p>
+
+Zapret-Next запускает `nfqws` при загрузке Android, настраивает IPv4/IPv6
+NFQUEUE и предоставляет управление через KernelSU WebUI или CLI. Установочный
+ZIP уже содержит бинарники, стратегии, списки и дампы: обязательное обновление
+после установки не требуется.
+
+> [!IMPORTANT]
+> Модуль не является VPN и не расшифровывает трафик. Он изменяет признаки
+> пакетов, по которым системы DPI определяют протоколы и сайты.
+
+## Возможности
+
+- полностью автономная установка без загрузок на телефоне;
+- автоматический выбор `nfqws` для `arm64` или `arm`;
+- современный KernelSU WebUI и CLI-команда `zapret`;
+- стратегии Flowseal, пользовательские домены и три режима охвата;
+- поддержка iptables и nftables, IPv4 и IPv6;
+- исключение VPN/TUN/WireGuard и совместимость с Root-режимом v2rayNG;
+- сохранение состояния после перезагрузки и проверка успешного запуска;
+- переключаемый журнал, ротация и экспорт в папку `Download`;
+- динамический статус прямо в описании модуля KernelSU.
+
+## Требования
+
+| Компонент | Требование |
+|---|---|
+| Root-менеджер | KernelSU или Magisk |
+| Архитектура | `arm64-v8a` или `armeabi-v7a` |
+| Ядро | `NETFILTER_NETLINK_QUEUE` и цель `NFQUEUE` |
+| Firewall | iptables или nftables |
+
+Если производитель удалил NFQUEUE из ядра, исправить это модулем невозможно.
+
+## Установка
+
+1. Скачайте `Zapret-Next.zip`.
+2. Установите ZIP в KernelSU или Magisk.
+3. Перезагрузите устройство.
+4. Откройте WebUI модуля и выберите подходящую стратегию.
+
+После первого запуска используется `general.bat`. В KernelSU штатная action-кнопка
+переключает последнюю выбранную стратегию: повторное нажатие останавливает модуль.
+
+## WebUI
+
+В интерфейсе доступны:
+
+- запуск, остановка и перезапуск `nfqws`;
+- выбор стратегии и режима обработки;
+- редактирование пользовательского списка доменов;
+- включение и выключение логирования;
+- просмотр, очистка и экспорт журнала;
+- обновление стратегий и `nfqws` вручную.
+
+Пользовательские домены сохраняются в
+`data/lists/list-general-user.txt`. Указывайте по одному домену на строку:
+
+```text
+rutracker.org
+nnmclub.to
+example.org
+```
+
+Если модуль работает, сохранение списка автоматически перезапускает `nfqws`.
+
+## Режимы обработки
+
+| Режим в WebUI | CLI | Что обрабатывается |
+|---|---|---|
+| Списки доменов + IP | `loaded` | Доменные и IP-списки Flowseal |
+| Только домены | `domains` | Только домены из основных и пользовательских списков |
+| Все сайты на портах стратегии | `all` | Любые адреса, но только на портах выбранной стратегии |
+
+VPN, прокси и туннельные интерфейсы исключаются во всех режимах. Режим `all`
+не означает перехват каждого порта устройства.
+
+## CLI
 
 ```sh
-chmod +x build.sh tests/test_parser.sh
-./tests/test_parser.sh
+# Полный путь работает в KernelSU без OverlayFS
+ZAPRET=/data/adb/modules/zapret_android/zapret
+
+su -c "$ZAPRET status"
+su -c "$ZAPRET list"
+su -c "$ZAPRET strategy 'general (ALT).bat'"
+su -c "$ZAPRET mode domains"
+su -c "$ZAPRET restart"
+su -c "$ZAPRET toggle"
+su -c "$ZAPRET logging off"
+```
+
+Magisk обычно монтирует короткую команду `zapret` из `system/bin`. Для неё в
+KernelSU потребуется OverlayFS; полный путь выше работает без метамодулей.
+
+## Конфигурация
+
+Файл настроек: `/data/adb/modules/zapret_android/config.conf`.
+
+| Параметр | Значение по умолчанию | Назначение |
+|---|---:|---|
+| `STRATEGY` | `general.bat` | Файл стратегии Flowseal |
+| `MODE` | `loaded` | `loaded`, `domains` или `all` |
+| `INTERFACE` | `any` | Все сети либо интерфейс/маска, например `wlan0`, `rmnet+` |
+| `FIREWALL` | `auto` | `auto`, `iptables` или `nft` |
+| `LOGGING` | `1` | Запись диагностического журнала |
+| `LOG_MAX_BYTES` | `2097152` | Размер текущего журнала до ротации |
+| `AUTO_UPDATE` | `0` | Автоматическое обновление на устройстве |
+
+Ручная остановка записывает `ENABLED=0`, поэтому модуль не запустится сам после
+перезагрузки. Следующий ручной запуск снова включает автозапуск.
+
+## Совместимость с VPN и прокси
+
+Из NFQUEUE исключены loopback и распространённые туннели: `tun*`, `utun*`,
+`tap*`, `wg*`, `ppp*`, IPsec, VTI, XFRM, GRE, Tailscale и ZeroTier.
+
+Для v2rayNG Root Mode дополнительно пропускаются:
+
+- UID пакетов `com.v2ray.ang` и `com.v2ray.ang.fdroid`;
+- маршрутные метки `1` и `255`;
+- интерфейс `utun7788` через общую маску `utun*`;
+- цепочка `CORE_FILTER` до правил Zapret-Next.
+
+## Журнал и диагностика
+
+Основной журнал: `data/zapret.log`. При достижении 2 МБ он переносится в
+`data/zapret.log.1`; хранится только одна предыдущая копия. Кнопка «Скачать»
+объединяет обе части и сохраняет файл в Android `Download`.
+
+При создании bug report приложите экспортированный журнал и укажите Android,
+ядро, root-менеджер, стратегию, режим и другие сетевые root-приложения.
+Перед публикацией удалите из журнала приватные домены и адреса.
+
+## Сборка
+
+На ПК нужны Bash, Python 3 и доступ к GitHub:
+
+```sh
+./tests/test_all.sh
 ./build.sh
 ```
 
-Во время сборки Python 3 скачивает актуальные стратегии, списки и дампы Flowseal,
-а также официальные `nfqws` для arm64 и arm. Готовый ZIP не требует сети при
-установке. Установите его в KernelSU/Magisk и перезагрузитесь — стандартная
-`general.bat` запускается автоматически. Управление:
+`build.sh` запускает тесты, скачивает актуальные материалы Flowseal и официальный
+релиз zapret, затем создаёт `Zapret-Next.zip`.
 
-```sh
-su -c 'zapret list'
-su -c 'zapret strategy general.bat'
-su -c 'zapret restart'
-su -c 'zapret toggle'
-su -c 'zapret mode domains'
-su -c 'zapret mode loaded'
-su -c 'zapret mode all'
-su -c 'zapret logging off'
-su -c 'zapret logging on'
-```
+## Участие в разработке
 
-KernelSU WebUI работает без системного монтирования. Для короткой команды `zapret`
-в KernelSU нужен метамодуль OverlayFS; без него используйте полный путь
-`/data/adb/modules/zapret_android/zapret`. Magisk монтирует `system/bin/zapret`
-самостоятельно.
+Правила и чек-листы находятся в [CONTRIBUTING.md](CONTRIBUTING.md). Для ошибок
+и предложений используйте шаблоны Issues, а перед Pull Request запустите
+`./tests/test_all.sh`. Один PR должен решать одну задачу.
 
-Настройки находятся в `/data/adb/modules/zapret_android/config.conf`. `INTERFACE=any`
-охватывает Wi-Fi и мобильную сеть; можно задать `wlan0` или маску `rmnet+` для
-iptables. Команда `zapret update` и `AUTO_UPDATE=1` остаются доступны для
-последующих обновлений на устройстве, но для первого запуска не нужны.
-Трафик loopback, VPN и туннельных интерфейсов (`tun*`, `wg*`, `ppp*`, IPsec,
-Tailscale, ZeroTier и другие распространённые туннели) исключён из NFQUEUE.
-Для совместимости с Root-режимом v2rayNG модуль также пропускает `utun*`, UID
-v2rayNG и его метки маршрутизации `1`/`255`; цепь `CORE_FILTER` выполняется до
-NFQUEUE независимо от порядка запуска приложений.
+## Благодарности и происхождение
 
-Переключатель «Логи» в WebUI и команда `zapret logging on|off` сохраняют настройку
-в `config.conf`. Запуск из WebUI передаётся через `ksud module action`, поэтому
-Android не завершает `nfqws` вместе с процессом KernelSU Manager.
-Кнопка действия модуля в KernelSU переключает последнюю выбранную стратегию,
-а «Экспорт» сохраняет журнал в общую папку `Download`.
-Карточка «Пользовательские домены» редактирует подключённый стратегиями файл
-`data/lists/list-general-user.txt` (по одному домену на строку).
-Режимы соответствуют Linux-проекту: `loaded` использует доменные и IP-списки,
-`domains` — только доменные списки, `all` — все сайты на портах стратегии.
-Ручная остановка сохраняется после перезагрузки, старт проверяется через две
-секунды, а журнал ограничен 2 МБ плюс один архив `zapret.log.1`.
+Zapret-Next создан с опорой на открытые проекты:
 
-Требования устройства: root, поддержка `NETFILTER_NETLINK_QUEUE` ядром и доступная
-цель `NFQUEUE` в iptables либо nftables. Если производитель удалил NFQUEUE из ядра,
-модуль не сможет перенаправить пакеты — это нельзя исправить скриптом.
+- [Sergeydigl3/zapret-discord-youtube-linux](https://github.com/Sergeydigl3/zapret-discord-youtube-linux) — архитектурное вдохновение и база Linux-адаптера;
+- [Flowseal/zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube) — база стратегий, списки и бинарные дампы;
+- [bol-van/zapret](https://github.com/bol-van/zapret) — оригинальный проект и движок `nfqws`.
 
-Источники: стратегии [Flowseal](https://github.com/Flowseal/zapret-discord-youtube)
-или [Sergeydigl3](https://github.com/Sergeydigl3/zapret-discord-youtube-linux),
-бинарник [bol-van/zapret](https://github.com/bol-van/zapret).
+Zapret-Next не аффилирован с авторами перечисленных проектов. Права на сторонние
+компоненты принадлежат их авторам и регулируются лицензиями исходных репозиториев.
+
+## Ответственность
+
+Проект предоставляется без гарантий. Пользователь самостоятельно отвечает за
+совместимость с устройством и соблюдение применимого законодательства.

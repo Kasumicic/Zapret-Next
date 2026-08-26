@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Стратегии и списки Flowseal
+    url: https://github.com/Flowseal/zapret-discord-youtube/issues
+    about: Если модуль запускается, но конкретный сайт не открывается ни с одной стратегией.
+  - name: Linux-адаптер Sergeydigl3
+    url: https://github.com/Sergeydigl3/zapret-discord-youtube-linux/issues
+    about: Вопросы и ошибки, относящиеся именно к Linux-версии.

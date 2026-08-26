@@ -1,7 +1,7 @@
 #!/system/bin/sh
 SKIPUNZIP=0
 
-ui_print "- Installing Zapret Android"
+ui_print "- Installing Zapret-Next"
 mkdir -p "$MODPATH/data/strategies" "$MODPATH/data/lists" "$MODPATH/bin"
 
 abi=$(getprop ro.product.cpu.abi)

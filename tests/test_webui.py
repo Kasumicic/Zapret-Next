@@ -3,6 +3,7 @@ import re
 
 html = pathlib.Path(__file__).parents[1].joinpath("webroot/index.html").read_text()
 assert "ksu.exec" in html and "from 'kernelsu'" not in html
+assert "<title>Zapret-Next</title>" in html and "<h1>Zapret-Next</h1>" in html
 for required in ("statusTitle", "strategies", "modes", "applyMode", "progress", "output", "clearLog", "refreshLog", "exportLog", "logging", "loggingState", "domains", "saveDomains", "domainState"):
     assert f'id="{required}"' in html
 assert "Работает" in html and "Остановлен" in html

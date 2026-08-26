@@ -2,14 +2,15 @@
 set -eu
 cd "$(dirname "$0")"
 ./tests/test_all.sh
-out=${1:-zapret-android-module.zip}
+out=${1:-Zapret-Next.zip}
 rm -f "$out"
 python3 - "$out" <<'PY'
 import io, json, pathlib, sys, tarfile, urllib.request, zipfile
 
 root = pathlib.Path.cwd()
 items = ('module.prop', 'customize.sh', 'service.sh', 'action.sh', 'uninstall.sh',
-         'zapret', 'config.conf.example', 'lib', 'system', 'webroot', 'META-INF', 'README.md')
+         'zapret', 'config.conf.example', 'lib', 'system', 'webroot', 'META-INF',
+         'README.md', 'CONTRIBUTING.md')
 
 def get(url):
     print(f'Downloading {url}', flush=True)
