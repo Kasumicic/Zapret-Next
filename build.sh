@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 out=${1:-Zapret-Next.zip}
 rm -f "$out"
 python3 - "$out" <<'PY'
-import io, json, pathlib, sys, tarfile, urllib.request, zipfile
+import datetime, io, json, pathlib, re, subprocess, sys, tarfile, urllib.request, zipfile
 
 root = pathlib.Path.cwd()
 items = ('module.prop', 'customize.sh', 'service.sh', 'action.sh', 'uninstall.sh',
@@ -24,10 +24,32 @@ def members(archive, predicate):
             if member.isfile() and predicate(pathlib.PurePosixPath(member.name)):
                 yield pathlib.PurePosixPath(member.name), tar.extractfile(member).read(), member.mode
 
-flowseal = get('https://github.com/Flowseal/zapret-discord-youtube/archive/refs/heads/main.tar.gz')
+flowseal_commit = json.loads(get('https://api.github.com/repos/Flowseal/zapret-discord-youtube/commits/main'))['sha']
+flowseal = get(f'https://github.com/Flowseal/zapret-discord-youtube/archive/{flowseal_commit}.tar.gz')
 release = json.loads(get('https://api.github.com/repos/bol-van/zapret/releases/latest'))
 tag = release['tag_name']
 zapret = get(f'https://github.com/bol-van/zapret/releases/download/{tag}/zapret-{tag}.tar.gz')
+
+version = re.search(r'^version=(.+)$', root.joinpath('module.prop').read_text(), re.M).group(1)
+try:
+    project_commit = subprocess.check_output(('git', 'rev-parse', '--short=12', 'HEAD'), text=True).strip()
+    dirty = subprocess.check_output(('git', 'status', '--porcelain', '--untracked-files=no'), text=True).strip()
+except (FileNotFoundError, subprocess.CalledProcessError):
+    project_commit, dirty = 'unknown', ''
+source = f'`{project_commit}`' + (' + локальные изменения' if dirty else '')
+built = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+info = f'''<!-- build-info:start -->
+| Компонент | Версия последней сборки |
+|---|---|
+| Zapret-Next | `{version}` |
+| nfqws / bol-van zapret | `{tag}` |
+| Стратегии и списки Flowseal | `{flowseal_commit[:12]}` |
+| Исходный commit Zapret-Next | {source} |
+| Дата сборки | `{built}` |
+<!-- build-info:end -->'''
+readme = root / 'README.md'
+text = re.sub(r'<!-- build-info:start -->.*?<!-- build-info:end -->', info, readme.read_text(), flags=re.S)
+readme.write_text(text)
 
 with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as archive:
     for item in items:
@@ -55,6 +77,6 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as archive:
         raise SystemExit(f'Incomplete payload: data={found}, binaries={binaries}')
     if 'payload/data/strategies/general.bat' not in archive.namelist():
         raise SystemExit('Default strategy general.bat is missing upstream')
-print(f'Packed Flowseal main + zapret {tag}')
+print(f'Packed Flowseal {flowseal_commit[:12]} + zapret {tag} + Zapret-Next {project_commit}')
 PY
 echo "$out"
