@@ -14,8 +14,18 @@ run() {
   fi
 }
 
+toggle() {
+  if nfqws_running; then
+    run stop || { echo "❌ Не удалось остановить Zapret"; return 1; }
+    echo "🔴 Zapret остановлен"
+  else
+    run start || { echo "❌ Не удалось запустить Zapret — проверьте журнал"; return 1; }
+    echo "🟢 Zapret запущен | Стратегия: $STRATEGY"
+  fi
+}
+
 case "$request" in
-  '') run toggle ;;
+  ''|toggle) toggle ;;
   start|stop|restart|update) run "$request" ;;
   logging-on) zapret_set_logging on ;;
   logging-off) zapret_set_logging off ;;
