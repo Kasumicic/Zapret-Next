@@ -1,6 +1,7 @@
 #!/system/bin/sh
 MODDIR=${0%/*}
 . "$MODDIR/lib/zapret.sh"
+rotate_log
 REQUEST="$MODDIR/data/action.request"
 BUSY="$MODDIR/data/action.busy"
 
@@ -30,9 +31,16 @@ case "$request" in
   logging-on) zapret_set_logging on ;;
   logging-off) zapret_set_logging off ;;
   strategy)
+    was_running=0; nfqws_running && was_running=1
     name=$(cat "$MODDIR/data/action.strategy" 2>/dev/null)
     rm -f "$MODDIR/data/action.strategy"
-    zapret_set_strategy "$name" && run restart
+    zapret_set_strategy "$name" && { [ "$was_running" = 0 ] || run restart; }
+    ;;
+  mode)
+    was_running=0; nfqws_running && was_running=1
+    mode=$(cat "$MODDIR/data/action.mode" 2>/dev/null)
+    rm -f "$MODDIR/data/action.mode"
+    zapret_set_mode "$mode" && { [ "$was_running" = 0 ] || run restart; }
     ;;
   *) die "Unknown action request: $request" ;;
 esac

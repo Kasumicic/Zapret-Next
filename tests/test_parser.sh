@@ -10,6 +10,7 @@ start "zapret" "%BIN%winws.exe" --wf-tcp=80,443 --wf-udp=443 ^
 --filter-udp=443 --dpi-desync=fake
 EOF
 MODDIR=$ROOT . "$ROOT/lib/zapret.sh"
+MODULE_PROP="$TMPDIR/zapret-module-prop-$$"
 out=$(parse_strategy "$case_file")
 echo "$out" | grep -q -- '--filter-tcp=443'
 echo "$out" | grep -q -- "$ROOT/data/lists/list.txt"

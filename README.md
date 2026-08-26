@@ -21,6 +21,9 @@ su -c 'zapret list'
 su -c 'zapret strategy general.bat'
 su -c 'zapret restart'
 su -c 'zapret toggle'
+su -c 'zapret mode domains'
+su -c 'zapret mode loaded'
+su -c 'zapret mode all'
 su -c 'zapret logging off'
 su -c 'zapret logging on'
 ```
@@ -47,6 +50,10 @@ Android не завершает `nfqws` вместе с процессом Kerne
 а «Экспорт» сохраняет журнал в общую папку `Download`.
 Карточка «Пользовательские домены» редактирует подключённый стратегиями файл
 `data/lists/list-general-user.txt` (по одному домену на строку).
+Режимы соответствуют Linux-проекту: `loaded` использует доменные и IP-списки,
+`domains` — только доменные списки, `all` — все сайты на портах стратегии.
+Ручная остановка сохраняется после перезагрузки, старт проверяется через две
+секунды, а журнал ограничен 2 МБ плюс один архив `zapret.log.1`.
 
 Требования устройства: root, поддержка `NETFILTER_NETLINK_QUEUE` ядром и доступная
 цель `NFQUEUE` в iptables либо nftables. Если производитель удалил NFQUEUE из ядра,

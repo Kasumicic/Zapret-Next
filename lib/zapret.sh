@@ -8,10 +8,14 @@ if [ -f "$MODDIR/config.conf" ]; then . "$MODDIR/config.conf"
 else . "$MODDIR/config.conf.example"
 fi
 : "${LOGGING:=1}"
+: "${MODE:=loaded}"
+: "${ENABLED:=1}"
+: "${LOG_MAX_BYTES:=2097152}"
 DATA="$MODDIR/data"
 BIN="$MODDIR/bin/nfqws"
 PID_FILE="$DATA/nfqws.pid"
 LOG_FILE="$DATA/zapret.log"
+MODULE_PROP="$MODDIR/module.prop"
 CHAIN=ZAPRET_ANDROID
 PRE_CHAIN=ZAPRET_ANDROID_PRE
 # Never send local, VPN or tunnel traffic to nfqws.
@@ -26,6 +30,11 @@ fi
 
 log() { echo "[$(date '+%F %T')] $*"; }
 die() { log "ERROR: $*" >&2; return 1; }
+rotate_log() {
+  [ -f "$LOG_FILE" ] || return 0
+  size=$(wc -c <"$LOG_FILE" 2>/dev/null)
+  [ "${size:-0}" -le "$LOG_MAX_BYTES" ] || mv -f "$LOG_FILE" "$LOG_FILE.1"
+}
 download() {
   url=$1 out=$2
   if command -v curl >/dev/null 2>&1; then curl -fL --connect-timeout 20 "$url" -o "$out"
@@ -51,10 +60,49 @@ save_setting() {
 zapret_set_logging() {
   case "$1" in on|1) LOGGING=1;; off|0) LOGGING=0;; *) die "logging: use on/off"; return 1;; esac
   save_setting LOGGING "$LOGGING"
-  [ "$LOGGING" = 1 ] && log "Logging enabled" >>"$LOG_FILE" || : >"$LOG_FILE"
+  if [ "$LOGGING" = 1 ]; then log "Logging enabled" >>"$LOG_FILE"
+  else rm -f "$LOG_FILE.1"; : >"$LOG_FILE"
+  fi
 }
 
 zapret_logging_status() { [ "$LOGGING" = 1 ] && echo on || echo off; }
+
+mode_label() {
+  case "$MODE" in loaded) echo "Списки + IP";; domains) echo "Только домены";; all) echo "Все сайты";; esac
+}
+
+apply_mode() {
+  ipset="$DATA/lists/ipset-all.txt"
+  backup="$DATA/lists/ipset-all.txt.backup"
+  mkdir -p "$DATA/lists"
+  [ -f "$ipset" ] || : >"$ipset"
+  if [ -s "$ipset" ] && ! grep -q '^203\.0\.113\.113/32$' "$ipset"; then cp "$ipset" "$backup"; fi
+  case "$MODE" in
+    loaded) [ -s "$backup" ] && cp "$backup" "$ipset" ;;
+    domains) echo '203.0.113.113/32' >"$ipset" ;;
+    all) : >"$ipset" ;;
+    *) die "Unknown mode: $MODE"; return 1 ;;
+  esac
+  return 0
+}
+
+zapret_set_mode() {
+  case "$1" in loaded|domains|all) MODE=$1;; *) die "mode: use loaded/domains/all"; return 1;; esac
+  save_setting MODE "$MODE"
+  apply_mode || return 1
+  if nfqws_running; then set_module_status running; else set_module_status stopped; fi
+  log "Mode selected: $MODE ($(mode_label))"
+}
+
+set_module_status() {
+  [ -f "$MODULE_PROP" ] || return 0
+  if [ "$1" = running ]; then description="🟢 Работает · $STRATEGY · $(mode_label)"
+  else description="🔴 Остановлен · последняя: $STRATEGY"
+  fi
+  safe=$(printf '%s' "$description" | sed 's/[&|]/\\&/g')
+  tmp="$MODULE_PROP.tmp"
+  sed "s|^description=.*|description=$safe|" "$MODULE_PROP" >"$tmp" && mv "$tmp" "$MODULE_PROP"
+}
 
 v2ray_uids() {
   if command -v cmd >/dev/null 2>&1; then packages=$(cmd package list packages -U 2>/dev/null)
@@ -69,7 +117,9 @@ zapret_set_strategy() {
   case "$1" in */*|*..*|*"'"*) die "Invalid strategy name"; return 1;; esac
   name=$1; [ -f "$DATA/strategies/$name" ] || [ -f "$DATA/strategies/$name.bat" ] && name=${name%.bat}.bat
   [ -f "$DATA/strategies/$name" ] || { die "Strategy not found: $1"; return 1; }
-  STRATEGY=$name; save_config; log "Selected $name"
+  STRATEGY=$name; save_config
+  if nfqws_running; then set_module_status running; else set_module_status stopped; fi
+  log "Selected $name"
 }
 
 # Converts Flowseal's single winws command into nfqws arguments.
@@ -176,12 +226,14 @@ firewall_setup() {
 }
 
 zapret_stop() {
-  old_pid=$(cat "$PID_FILE" 2>/dev/null)
+  old_pid=$(cat "$PID_FILE" 2>/dev/null || true)
   log "Stop requested: pid=${old_pid:-none}; clearing firewall rules"
   [ -f "$PID_FILE" ] && kill "$(cat "$PID_FILE")" 2>/dev/null
   pkill -f "$MODDIR/bin/nfqws" 2>/dev/null
   rm -f "$PID_FILE"
   firewall_clear
+  [ "${1:-}" = keep ] || { ENABLED=0; save_setting ENABLED 0; }
+  set_module_status stopped
   log "Stopped: process and firewall rules removed"
 }
 
@@ -200,6 +252,7 @@ zapret_start() {
   [ -x "$BIN" ] || { die "nfqws missing; run: zapret update"; return 1; }
   strategy="$DATA/strategies/$STRATEGY"
   [ -f "$strategy" ] || { die "Strategy missing: $STRATEGY; run update/list"; return 1; }
+  apply_mode || return 1
   args=$(parse_strategy "$strategy") || return 1
   tcp=$(strategy_ports "$strategy" tcp); udp=$(strategy_ports "$strategy" udp)
   [ -n "$tcp$udp" ] || { die "No --wf-tcp/udp ports in strategy"; return 1; }
@@ -208,7 +261,7 @@ zapret_start() {
   fi
   log "Parsed strategy: tcp=${tcp:-none}; udp=${udp:-none}; firewall=$firewall"
   log "nfqws arguments: $args"
-  zapret_stop >/dev/null 2>&1
+  zapret_stop keep >/dev/null 2>&1
   log "Preparing data permissions and $firewall rules"
   chmod -R 755 "$DATA" || { die "Cannot set data permissions"; return 1; }
   firewall_setup "$tcp" "$udp" || { firewall_clear; die "Firewall setup failed (NFQUEUE kernel support required)"; return 1; }
@@ -216,6 +269,10 @@ zapret_start() {
   cd "$DATA" || return 1
   # Strategy files are trusted input downloaded from the configured repository.
   "$BIN" --uid=0:0 --daemon --pidfile="$PID_FILE" --qnum="$QUEUE_NUM" --dpi-desync-fwmark="$FW_MARK" $args || { firewall_clear; return 1; }
+  sleep 2
+  nfqws_running || { firewall_clear; set_module_status stopped; die "nfqws exited during startup health check"; return 1; }
+  ENABLED=1; save_setting ENABLED 1
+  set_module_status running
   log "Started: strategy=$STRATEGY; pid=$(cat "$PID_FILE" 2>/dev/null); tcp=${tcp:-none}; udp=${udp:-none}"
 }
 
@@ -231,7 +288,7 @@ zapret_toggle() {
 
 zapret_status() {
   if nfqws_running; then echo "running, PID $(cat "$PID_FILE"), $STRATEGY"
-  else echo "stopped, $STRATEGY"; return 1
+  else set_module_status stopped; echo "stopped, $STRATEGY"; return 1
   fi
 }
 
@@ -249,6 +306,7 @@ zapret_update() {
   find "$root" -type f -name '*.bat' -exec cp {} "$DATA/strategies/" \;
   [ -d "$root/lists" ] && cp -R "$root/lists/." "$DATA/lists/"
   [ -d "$root/bin" ] && find "$root/bin" -type f -name '*.bin' -exec cp {} "$DATA/bin/" \;
+  apply_mode || return 1
 
   log "Downloading official nfqws"
   api="$tmp/release.json"

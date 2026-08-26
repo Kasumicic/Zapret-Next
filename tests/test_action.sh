@@ -13,7 +13,9 @@ STRATEGY='general (ALT).bat'
 die(){ echo "$*" >&2; return 1; }
 zapret_set_logging(){ :; }
 zapret_set_strategy(){ :; }
+zapret_set_mode(){ echo "$1" >"$DATA/mode"; }
 nfqws_running(){ [ -e "$DATA/running" ]; }
+rotate_log(){ :; }
 EOF
 cat >"$CASE/zapret" <<'EOF'
 #!/bin/sh
@@ -32,4 +34,9 @@ echo start >"$CASE/data/action.request"
 sh "$CASE/action.sh"
 [ "$(cat "$CASE/data/called")" = start ]
 [ ! -e "$CASE/data/action.busy" ]
+echo mode >"$CASE/data/action.request"
+echo domains >"$CASE/data/action.mode"
+sh "$CASE/action.sh"
+[ "$(cat "$CASE/data/mode")" = domains ]
+[ "$(cat "$CASE/data/called")" = restart ]
 echo OK

@@ -25,14 +25,53 @@ grep -qx 'LOGGING=0' "$CASE/config.conf"
 zapret_set_logging on
 [ "$(zapret_logging_status)" = on ]
 grep -qx 'LOGGING=1' "$CASE/config.conf"
-zapret_stop(){ :; }
-firewall_setup(){ :; }
-firewall_clear(){ :; }
-zapret_start >/dev/null
+(
+  zapret_stop(){ :; }
+  firewall_setup(){ :; }
+  firewall_clear(){ :; }
+  nfqws_running(){ :; }
+  sleep(){ :; }
+  zapret_start >/dev/null
+)
 grep -qx -- '--uid=0:0' "$CAPTURE"
 ! grep -q -- '--user=' "$CAPTURE"
 [ "$(stat -c %a "$CASE/data")" = 755 ]
 [ "$(stat -c %a "$CASE/data/lists/list.txt")" = 755 ]
+
+printf '198.51.100.0/24\n' >"$CASE/data/lists/ipset-all.txt"
+zapret_set_mode all >/dev/null
+[ ! -s "$CASE/data/lists/ipset-all.txt" ]
+zapret_set_mode domains >/dev/null
+grep -qx '203.0.113.113/32' "$CASE/data/lists/ipset-all.txt"
+zapret_set_mode loaded >/dev/null
+grep -qx '198.51.100.0/24' "$CASE/data/lists/ipset-all.txt"
+
+LOG_MAX_BYTES=4
+printf '12345' >"$LOG_FILE"
+rotate_log
+[ "$(cat "$LOG_FILE.1")" = 12345 ]
+[ ! -e "$LOG_FILE" ]
+
+(
+  zapret_stop(){ :; }
+  firewall_setup(){ :; }
+  firewall_clear(){ : >"$CASE/health-cleared"; }
+  nfqws_running(){ return 1; }
+  sleep(){ :; }
+  ! zapret_start >/dev/null 2>&1
+)
+[ -e "$CASE/health-cleared" ]
+
+cp "$ROOT/module.prop" "$CASE/module.prop"
+set_module_status running
+grep -q '^description=🟢 Работает · general.bat · Списки + IP$' "$CASE/module.prop"
+(
+  firewall_clear(){ :; }
+  pkill(){ :; }
+  zapret_stop >/dev/null
+)
+grep -qx 'ENABLED=0' "$CASE/config.conf"
+grep -q '^description=🔴 Остановлен' "$CASE/module.prop"
 echo $$ >"$PID_FILE"
 ! nfqws_running
 [ ! -e "$PID_FILE" ]

@@ -3,7 +3,7 @@ MODDIR=${0%/*}
 . "$MODDIR/lib/zapret.sh"
 
 usage() {
-  echo "zapret {start|stop|restart|toggle|status|update|list|strategy NAME|logging on|off|status|menu|parse FILE}"
+  echo "zapret {start|stop|restart|toggle|status|update|list|strategy NAME|mode loaded|domains|all|status|logging on|off|status|menu|parse FILE}"
 }
 
 menu() {
@@ -26,6 +26,7 @@ case "${1:-menu}" in
   start) zapret_start;; stop) zapret_stop;; restart) zapret_stop; zapret_start;; toggle) zapret_toggle;;
   status) zapret_status;; update) zapret_update;; list) zapret_list;;
   strategy) [ -n "${2:-}" ] || { usage; exit 2; }; zapret_set_strategy "$2";;
+  mode) case "${2:-status}" in loaded|domains|all) zapret_set_mode "$2";; status) echo "$MODE";; *) usage; exit 2;; esac;;
   logging) case "${2:-status}" in on|off) zapret_set_logging "$2";; status) zapret_logging_status;; *) usage; exit 2;; esac;;
   parse) [ -f "${2:-}" ] || exit 2; parse_strategy "$2";;
   menu) menu;; -h|--help|help) usage;; *) usage; exit 2;;

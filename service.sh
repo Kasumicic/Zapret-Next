@@ -1,6 +1,13 @@
 #!/system/bin/sh
 MODDIR=${0%/*}
 . "$MODDIR/lib/zapret.sh"
+rotate_log
+
+if [ "$ENABLED" != 1 ]; then
+  set_module_status stopped
+  [ "$LOGGING" = 1 ] && log "Boot start skipped: module was manually stopped" >>"$LOG_FILE"
+  exit 0
+fi
 
 # Android late_start can run before networking is usable.
 i=0

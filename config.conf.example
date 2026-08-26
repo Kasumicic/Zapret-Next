@@ -9,3 +9,7 @@ AUTO_UPDATE=0
 UPDATE_HOURS=24
 SOURCE=flowseal
 LOGGING=1
+# loaded: domains + IP lists; domains: hostlists only; all: every destination on strategy ports.
+MODE=loaded
+ENABLED=1
+LOG_MAX_BYTES=2097152
