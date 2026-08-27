@@ -163,8 +163,8 @@ KernelSU потребуется OverlayFS; полный путь выше раб
 | Zapret-Next | `1.3.1` |
 | nfqws / bol-van zapret | `v72.13` |
 | Стратегии и списки Flowseal | `fb32282c55a0` |
-| Исходный commit Zapret-Next | `5cb084a9e103` + локальные изменения |
-| Дата сборки | `2026-08-27 06:57 UTC` |
+| Исходный commit Zapret-Next | `19be3e34ff61` + локальные изменения |
+| Дата сборки | `2026-08-27 07:19 UTC` |
 <!-- build-info:end -->
 
 ## Сборка
