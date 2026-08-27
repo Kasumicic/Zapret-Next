@@ -31,8 +31,10 @@ grep -qx 'LOGGING=1' "$CASE/config.conf"
   firewall_clear(){ :; }
   nfqws_running(){ :; }
   sleep(){ :; }
-  zapret_start >/dev/null
+  zapret_start >"$CASE/start.log"
 )
+grep -q 'Startup \[1/7\] Request: strategy=general.bat; mode=loaded' "$CASE/start.log"
+grep -q 'Startup complete: pid=' "$CASE/start.log"
 grep -qx -- '--uid=0:0' "$CAPTURE"
 ! grep -q -- '--user=' "$CAPTURE"
 [ "$(stat -c %a "$CASE/data")" = 755 ]
@@ -94,6 +96,7 @@ EOF
 chmod 755 "$CASE/iptables"
 v2ray_uids() { echo 10123; }
 ipt_setup "$CASE/iptables" 80,443 443
+grep -q -- '-w 5 -t mangle' "$FW_CAPTURE"
 grep -q -- '-A ZAPRET_ANDROID -o tun+ -j RETURN' "$FW_CAPTURE"
 grep -q -- '-A ZAPRET_ANDROID -o utun+ -j RETURN' "$FW_CAPTURE"
 grep -q -- '-A ZAPRET_ANDROID -o wg+ -j RETURN' "$FW_CAPTURE"
@@ -105,12 +108,26 @@ grep -q -- '-A ZAPRET_ANDROID_PRE -i tun+ -j RETURN' "$FW_CAPTURE"
 grep -q -- '-A ZAPRET_ANDROID_PRE -m mark --mark 0x1 -j RETURN' "$FW_CAPTURE"
 grep -q -- '-A ZAPRET_ANDROID_PRE -i tailscale+ -j RETURN' "$FW_CAPTURE"
 
+(
+  ipt_clear(){ :; }
+  v2ray_uids(){ :; }
+  ipt_exec(){ case " $* " in *' NFQUEUE '*) return 1;; *) return 0;; esac; }
+  ! ipt_setup iptables 80 443
+)
+(
+  PATH=$CASE/bin
+  iptables(){ :; }
+  ipt_setup(){ :; }
+  FIREWALL=auto firewall_setup 80 443
+)
+
 : >"$FW_CAPTURE"
 (
   unset ZAPRET_LIB_LOADED
   MODDIR=$CASE . "$ROOT/lib/zapret.sh"
   nft() { printf '%s\n' "$*" >>"$FW_CAPTURE"; }
   v2ray_uids() { echo 10123; }
+  INTERFACE=rmnet+
   FIREWALL=nft firewall_setup 80,443 443
 )
 grep -q -- 'hook output priority -140' "$FW_CAPTURE"
@@ -119,7 +136,30 @@ grep -q -- 'out oifname utun\* return' "$FW_CAPTURE"
 grep -q -- 'out oifname wg\* return' "$FW_CAPTURE"
 grep -q -- 'out meta skuid 10123 return' "$FW_CAPTURE"
 grep -q -- 'out meta mark { 0x1, 0xff } return' "$FW_CAPTURE"
+grep -q -- 'out oifname rmnet\* tcp dport { 80,443 }' "$FW_CAPTURE"
 grep -q -- 'pre iifname tun\* return' "$FW_CAPTURE"
 grep -q -- 'pre meta mark { 0x1, 0xff } return' "$FW_CAPTURE"
 grep -q -- 'pre iifname tailscale\* return' "$FW_CAPTURE"
+(
+  nft(){ case " $* " in *' queue '*) return 1;; *) return 0;; esac; }
+  FIREWALL=nft
+  ! firewall_setup 80 443
+)
+
+mkdir -p "$CASE/service/lib" "$CASE/service/data"
+cp "$ROOT/service.sh" "$CASE/service/service.sh"
+cat >"$CASE/service/lib/zapret.sh" <<'EOF'
+ENABLED=1
+LOGGING=1
+AUTO_UPDATE=1
+UPDATE_HOURS=0
+LOG_FILE=$MODDIR/data/log
+rotate_log(){ :; }
+getprop(){ echo 1; }
+zapret_update(){ echo x >>"$MODDIR/data/update.calls"; return 1; }
+zapret_start(){ echo x >>"$MODDIR/data/start.calls"; return 1; }
+EOF
+sh "$CASE/service/service.sh" || :
+[ "$(wc -l <"$CASE/service/data/update.calls")" = 1 ]
+[ "$(wc -l <"$CASE/service/data/start.calls")" = 1 ]
 echo OK

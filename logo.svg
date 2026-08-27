@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 96" role="img" aria-labelledby="title desc">
+  <title id="title">Zapret-Next</title>
+  <desc id="desc">Логотип Zapret-Next</desc>
+  <g fill="none" stroke="#e7a33e" stroke-width="10" stroke-linecap="round">
+    <path d="M20 64c24 0 20-40 48-40h16"/>
+    <path d="M100 24h22M100 64h22"/>
+  </g>
+  <text x="148" y="66" fill="#e7a33e" font-family="Arial,Helvetica,sans-serif" font-size="56" font-weight="700" letter-spacing="-2">zapret</text>
+</svg>

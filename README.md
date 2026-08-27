@@ -1,4 +1,6 @@
-<h1 align="center">Zapret-Next</h1>
+<p align="center">
+  <img src="logo.svg" alt="Логотип Zapret-Next" width="220">
+</p>
 
 <p align="center">
   <strong>Автономный DPI-bypass модуль для Android</strong><br>
@@ -19,6 +21,16 @@ ZIP уже содержит бинарники, стратегии, списки
 > [!IMPORTANT]
 > Модуль не является VPN и не расшифровывает трафик. Он изменяет признаки
 > пакетов, по которым системы DPI определяют протоколы и сайты.
+
+<details>
+<summary><strong>Скриншоты WebUI</strong></summary>
+<br>
+<p align="center">
+  <img src="docs/screenshots/main.jpg" alt="Главный экран" width="30%">
+  <img src="docs/screenshots/settings.jpg" alt="Настройки" width="30%">
+  <img src="docs/screenshots/diagnostic.jpg" alt="Диагностика" width="30%">
+</p>
+</details>
 
 ## Возможности
 
@@ -151,8 +163,8 @@ KernelSU потребуется OverlayFS; полный путь выше раб
 | Zapret-Next | `1.3.1` |
 | nfqws / bol-van zapret | `v72.13` |
 | Стратегии и списки Flowseal | `fb32282c55a0` |
-| Исходный commit Zapret-Next | `b6a0cb3b7a75` |
-| Дата сборки | `2026-08-26 14:16 UTC` |
+| Исходный commit Zapret-Next | `5cb084a9e103` + локальные изменения |
+| Дата сборки | `2026-08-27 06:57 UTC` |
 <!-- build-info:end -->
 
 ## Сборка

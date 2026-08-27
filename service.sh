@@ -20,7 +20,11 @@ if [ "${AUTO_UPDATE:-0}" = 1 ]; then
   last=$(cat "$MODDIR/data/last_update" 2>/dev/null || echo 0)
   now=$(date +%s)
   if [ $((now - last)) -ge $((UPDATE_HOURS * 3600)) ]; then
-    [ "$LOGGING" = 1 ] && zapret_update >>"$LOG_FILE" 2>&1 || zapret_update >/dev/null 2>&1
+    if [ "$LOGGING" = 1 ]; then zapret_update >>"$LOG_FILE" 2>&1
+    else zapret_update >/dev/null 2>&1
+    fi
   fi
 fi
-[ "$LOGGING" = 1 ] && zapret_start >>"$LOG_FILE" 2>&1 || zapret_start >/dev/null 2>&1
+if [ "$LOGGING" = 1 ]; then zapret_start >>"$LOG_FILE" 2>&1
+else zapret_start >/dev/null 2>&1
+fi

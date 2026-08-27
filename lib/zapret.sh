@@ -141,50 +141,57 @@ strategy_ports() {
     sed -e 's/%GameFilterTCP%/1024-65535/g' -e 's/%GameFilterUDP%/1024-65535/g' -e 's/,$//' -e 's/^,//'
 }
 
+# POSIX wrapper to wait for xtables lock (prevents lock race with Android netd)
+ipt_exec() {
+  tool=$1
+  shift
+  "$tool" -w 5 "$@"
+}
+
 ipt_clear() {
   cmd=$1
-  "$cmd" -t mangle -D OUTPUT -j "$CHAIN" 2>/dev/null
-  "$cmd" -t mangle -D PREROUTING -j "$PRE_CHAIN" 2>/dev/null
-  "$cmd" -t mangle -F "$CHAIN" 2>/dev/null
-  "$cmd" -t mangle -X "$CHAIN" 2>/dev/null
-  "$cmd" -t mangle -F "$PRE_CHAIN" 2>/dev/null
-  "$cmd" -t mangle -X "$PRE_CHAIN" 2>/dev/null
+  ipt_exec "$cmd" -t mangle -D OUTPUT -j "$CHAIN" 2>/dev/null
+  ipt_exec "$cmd" -t mangle -D PREROUTING -j "$PRE_CHAIN" 2>/dev/null
+  ipt_exec "$cmd" -t mangle -F "$CHAIN" 2>/dev/null
+  ipt_exec "$cmd" -t mangle -X "$CHAIN" 2>/dev/null
+  ipt_exec "$cmd" -t mangle -F "$PRE_CHAIN" 2>/dev/null
+  ipt_exec "$cmd" -t mangle -X "$PRE_CHAIN" 2>/dev/null
   return 0
 }
 
 ipt_setup() {
   cmd=$1 tcp=$2 udp=$3
   ipt_clear "$cmd"
-  "$cmd" -t mangle -N "$CHAIN" || return 1
+  ipt_exec "$cmd" -t mangle -N "$CHAIN" || return 1
   for tunnel in $TUNNEL_INTERFACES; do
-    "$cmd" -t mangle -A "$CHAIN" -o "$tunnel" -j RETURN || return 1
+    ipt_exec "$cmd" -t mangle -A "$CHAIN" -o "$tunnel" -j RETURN || return 1
   done
   # nfqws marks reinjected packets; returning them prevents an NFQUEUE loop.
-  "$cmd" -t mangle -A "$CHAIN" -m mark --mark "$FW_MARK" -j RETURN || return 1
+  ipt_exec "$cmd" -t mangle -A "$CHAIN" -m mark --mark "$FW_MARK" -j RETURN || return 1
   for uid in $(v2ray_uids); do
-    "$cmd" -t mangle -A "$CHAIN" -m owner --uid-owner "$uid" -j RETURN || return 1
+    ipt_exec "$cmd" -t mangle -A "$CHAIN" -m owner --uid-owner "$uid" -j RETURN || return 1
   done
   # Run v2rayNG's root chain first even when v2rayNG starts after this module.
-  "$cmd" -t mangle -N "$V2RAY_CHAIN" 2>/dev/null || true
-  "$cmd" -t mangle -A "$CHAIN" -j "$V2RAY_CHAIN" || return 1
+  ipt_exec "$cmd" -t mangle -N "$V2RAY_CHAIN" 2>/dev/null || true
+  ipt_exec "$cmd" -t mangle -A "$CHAIN" -j "$V2RAY_CHAIN" || return 1
   for mark in $V2RAY_MARKS; do
-    "$cmd" -t mangle -A "$CHAIN" -m mark --mark "$mark" -j RETURN || return 1
+    ipt_exec "$cmd" -t mangle -A "$CHAIN" -m mark --mark "$mark" -j RETURN || return 1
   done
   iface=""; [ "$INTERFACE" != any ] && iface="-o $INTERFACE"
-  [ -n "$tcp" ] && "$cmd" -t mangle -A "$CHAIN" $iface -p tcp -m multiport --dports "$(echo "$tcp" | tr '-' ':')" -j NFQUEUE --queue-num "$QUEUE_NUM" --queue-bypass
-  [ -n "$udp" ] && "$cmd" -t mangle -A "$CHAIN" $iface -p udp -m multiport --dports "$(echo "$udp" | tr '-' ':')" -j NFQUEUE --queue-num "$QUEUE_NUM" --queue-bypass
-  "$cmd" -t mangle -A OUTPUT -j "$CHAIN" || return 1
+  if [ -n "$tcp" ]; then ipt_exec "$cmd" -t mangle -A "$CHAIN" $iface -p tcp -m multiport --dports "$(echo "$tcp" | tr '-' ':')" -j NFQUEUE --queue-num "$QUEUE_NUM" --queue-bypass || return 1; fi
+  if [ -n "$udp" ]; then ipt_exec "$cmd" -t mangle -A "$CHAIN" $iface -p udp -m multiport --dports "$(echo "$udp" | tr '-' ':')" -j NFQUEUE --queue-num "$QUEUE_NUM" --queue-bypass || return 1; fi
+  ipt_exec "$cmd" -t mangle -A OUTPUT -j "$CHAIN" || return 1
   # PREROUTING handles forwarded/hotspot traffic; only original destination ports match.
-  "$cmd" -t mangle -N "$PRE_CHAIN" || return 1
+  ipt_exec "$cmd" -t mangle -N "$PRE_CHAIN" || return 1
   for tunnel in $TUNNEL_INTERFACES; do
-    "$cmd" -t mangle -A "$PRE_CHAIN" -i "$tunnel" -j RETURN || return 1
+    ipt_exec "$cmd" -t mangle -A "$PRE_CHAIN" -i "$tunnel" -j RETURN || return 1
   done
   for mark in $V2RAY_MARKS; do
-    "$cmd" -t mangle -A "$PRE_CHAIN" -m mark --mark "$mark" -j RETURN || return 1
+    ipt_exec "$cmd" -t mangle -A "$PRE_CHAIN" -m mark --mark "$mark" -j RETURN || return 1
   done
-  [ -n "$tcp" ] && "$cmd" -t mangle -A "$PRE_CHAIN" -p tcp -m multiport --dports "$(echo "$tcp" | tr '-' ':')" -m mark ! --mark "$FW_MARK" -j NFQUEUE --queue-num "$QUEUE_NUM" --queue-bypass
-  [ -n "$udp" ] && "$cmd" -t mangle -A "$PRE_CHAIN" -p udp -m multiport --dports "$(echo "$udp" | tr '-' ':')" -m mark ! --mark "$FW_MARK" -j NFQUEUE --queue-num "$QUEUE_NUM" --queue-bypass
-  "$cmd" -t mangle -A PREROUTING -j "$PRE_CHAIN"
+  if [ -n "$tcp" ]; then ipt_exec "$cmd" -t mangle -A "$PRE_CHAIN" -p tcp -m multiport --dports "$(echo "$tcp" | tr '-' ':')" -m mark ! --mark "$FW_MARK" -j NFQUEUE --queue-num "$QUEUE_NUM" --queue-bypass || return 1; fi
+  if [ -n "$udp" ]; then ipt_exec "$cmd" -t mangle -A "$PRE_CHAIN" -p udp -m multiport --dports "$(echo "$udp" | tr '-' ':')" -m mark ! --mark "$FW_MARK" -j NFQUEUE --queue-num "$QUEUE_NUM" --queue-bypass || return 1; fi
+  ipt_exec "$cmd" -t mangle -A PREROUTING -j "$PRE_CHAIN"
 }
 
 firewall_clear() {
@@ -198,31 +205,37 @@ firewall_setup() {
   tcp=$1 udp=$2
   if [ "$FIREWALL" != nft ] && command -v iptables >/dev/null 2>&1; then
     ipt_setup iptables "$tcp" "$udp" || return 1
-    command -v ip6tables >/dev/null 2>&1 && ipt_setup ip6tables "$tcp" "$udp"
-    return
+    if command -v ip6tables >/dev/null 2>&1; then ipt_setup ip6tables "$tcp" "$udp" || return 1; fi
+    return 0
   fi
   command -v nft >/dev/null 2>&1 || { die "iptables/nft not found"; return 1; }
   nft delete table inet zapret_android 2>/dev/null
-  nft add table inet zapret_android
+  nft add table inet zapret_android || return 1
   # Run after iptables mangle/OUTPUT, where v2rayNG applies its route mark.
-  nft 'add chain inet zapret_android out { type filter hook output priority -140; }'
+  nft 'add chain inet zapret_android out { type filter hook output priority -140; }' || return 1
   for tunnel in $TUNNEL_INTERFACES; do
-    nft add rule inet zapret_android out oifname "${tunnel%+}*" return
+    nft add rule inet zapret_android out oifname "${tunnel%+}*" return || return 1
   done
-  nft add rule inet zapret_android out meta mark "$FW_MARK" return
+  nft add rule inet zapret_android out meta mark "$FW_MARK" return || return 1
   for uid in $(v2ray_uids); do
-    nft add rule inet zapret_android out meta skuid "$uid" return
+    nft add rule inet zapret_android out meta skuid "$uid" return || return 1
   done
-  nft add rule inet zapret_android out meta mark "{ 0x1, 0xff }" return
-  [ -n "$tcp" ] && nft add rule inet zapret_android out tcp dport "{ $tcp }" queue num "$QUEUE_NUM" bypass
-  [ -n "$udp" ] && nft add rule inet zapret_android out udp dport "{ $udp }" queue num "$QUEUE_NUM" bypass
-  nft 'add chain inet zapret_android pre { type filter hook prerouting priority -140; }'
+  nft add rule inet zapret_android out meta mark "{ 0x1, 0xff }" return || return 1
+  if [ "$INTERFACE" = any ]; then
+    if [ -n "$tcp" ]; then nft add rule inet zapret_android out tcp dport "{ $tcp }" queue num "$QUEUE_NUM" bypass || return 1; fi
+    if [ -n "$udp" ]; then nft add rule inet zapret_android out udp dport "{ $udp }" queue num "$QUEUE_NUM" bypass || return 1; fi
+  else
+    case "$INTERFACE" in *+) nft_interface="${INTERFACE%+}*";; *) nft_interface=$INTERFACE;; esac
+    if [ -n "$tcp" ]; then nft add rule inet zapret_android out oifname "$nft_interface" tcp dport "{ $tcp }" queue num "$QUEUE_NUM" bypass || return 1; fi
+    if [ -n "$udp" ]; then nft add rule inet zapret_android out oifname "$nft_interface" udp dport "{ $udp }" queue num "$QUEUE_NUM" bypass || return 1; fi
+  fi
+  nft 'add chain inet zapret_android pre { type filter hook prerouting priority -140; }' || return 1
   for tunnel in $TUNNEL_INTERFACES; do
-    nft add rule inet zapret_android pre iifname "${tunnel%+}*" return
+    nft add rule inet zapret_android pre iifname "${tunnel%+}*" return || return 1
   done
-  nft add rule inet zapret_android pre meta mark "{ 0x1, 0xff }" return
-  [ -n "$tcp" ] && nft add rule inet zapret_android pre tcp dport "{ $tcp }" meta mark != "$FW_MARK" queue num "$QUEUE_NUM" bypass
-  [ -n "$udp" ] && nft add rule inet zapret_android pre udp dport "{ $udp }" meta mark != "$FW_MARK" queue num "$QUEUE_NUM" bypass
+  nft add rule inet zapret_android pre meta mark "{ 0x1, 0xff }" return || return 1
+  if [ -n "$tcp" ]; then nft add rule inet zapret_android pre tcp dport "{ $tcp }" meta mark != "$FW_MARK" queue num "$QUEUE_NUM" bypass || return 1; fi
+  if [ -n "$udp" ]; then nft add rule inet zapret_android pre udp dport "{ $udp }" meta mark != "$FW_MARK" queue num "$QUEUE_NUM" bypass || return 1; fi
 }
 
 zapret_stop() {
@@ -248,10 +261,12 @@ nfqws_running() {
 }
 
 zapret_start() {
-  log "Start requested: strategy=$STRATEGY; abi=$(uname -m); interface=$INTERFACE; queue=$QUEUE_NUM"
+  log "Startup [1/7] Request: strategy=$STRATEGY; mode=$MODE; abi=$(uname -m); kernel=$(uname -r)"
+  log "Startup [2/7] Validate: binary=$BIN; interface=$INTERFACE; firewall=$FIREWALL; queue=$QUEUE_NUM; mark=$FW_MARK"
   [ -x "$BIN" ] || { die "nfqws missing; run: zapret update"; return 1; }
   strategy="$DATA/strategies/$STRATEGY"
   [ -f "$strategy" ] || { die "Strategy missing: $STRATEGY; run update/list"; return 1; }
+  log "Startup [3/7] Apply mode: $MODE ($(mode_label)); strategy_file=$strategy"
   apply_mode || return 1
   args=$(parse_strategy "$strategy") || return 1
   tcp=$(strategy_ports "$strategy" tcp); udp=$(strategy_ports "$strategy" udp)
@@ -259,13 +274,14 @@ zapret_start() {
   if [ "$FIREWALL" != nft ] && command -v iptables >/dev/null 2>&1; then firewall=iptables
   else firewall=nft
   fi
-  log "Parsed strategy: tcp=${tcp:-none}; udp=${udp:-none}; firewall=$firewall"
-  log "nfqws arguments: $args"
+  log "Startup [4/7] Parsed strategy: tcp=${tcp:-none}; udp=${udp:-none}; backend=$firewall"
+  log "Startup [4/7] nfqws arguments: $args"
+  log "Startup [5/7] Reset previous process and firewall state"
   zapret_stop keep >/dev/null 2>&1
-  log "Preparing data permissions and $firewall rules"
   chmod -R 755 "$DATA" || { die "Cannot set data permissions"; return 1; }
+  log "Startup [6/7] Install $firewall rules for output and forwarded traffic"
   firewall_setup "$tcp" "$udp" || { firewall_clear; die "Firewall setup failed (NFQUEUE kernel support required)"; return 1; }
-  log "Firewall ready; launching nfqws as uid=0:0"
+  log "Startup [7/7] Launch nfqws as uid=0:0 and run health check"
   cd "$DATA" || return 1
   # Strategy files are trusted input downloaded from the configured repository.
   "$BIN" --uid=0:0 --daemon --pidfile="$PID_FILE" --qnum="$QUEUE_NUM" --dpi-desync-fwmark="$FW_MARK" $args || { firewall_clear; return 1; }
@@ -273,7 +289,7 @@ zapret_start() {
   nfqws_running || { firewall_clear; set_module_status stopped; die "nfqws exited during startup health check"; return 1; }
   ENABLED=1; save_setting ENABLED 1
   set_module_status running
-  log "Started: strategy=$STRATEGY; pid=$(cat "$PID_FILE" 2>/dev/null); tcp=${tcp:-none}; udp=${udp:-none}"
+  log "Startup complete: pid=$(cat "$PID_FILE" 2>/dev/null); strategy=$STRATEGY; mode=$MODE; tcp=${tcp:-none}; udp=${udp:-none}; backend=$firewall"
 }
 
 zapret_toggle() {
